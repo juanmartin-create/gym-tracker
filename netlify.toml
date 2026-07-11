@@ -1,0 +1,31 @@
+# Netlify config — sitio estatico, publica esta carpeta como raiz
+[build]
+  publish = "."
+
+# HTML nunca se cachea largo — asi los cambios llegan en el proximo abrir
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# El service worker tampoco — asi se actualiza rapido
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# El manifest tampoco
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# Assets con hash pueden cachear largo (aca no hay hash asi que corto)
+[[headers]]
+  for = "/*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=60"
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=60"
