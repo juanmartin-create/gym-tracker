@@ -110,23 +110,34 @@
     for (const r of s.routines) {
       for (const ex of r.exercises) {
         if (!ex.muscle) ex.muscle = guessMuscle(ex.name);
-        if (!ex.targetSets) {
-          const n = ex.sets || 3;
-          ex.targetSets = Array.from({ length: n }, () => ({ reps: 8, rir: 2 }));
-        }
       }
     }
-    // v3: nutricion + split Nippard
+    // v3: nutricion
     if (!s.version || s.version < 3) {
       s.profile = s.profile || null;
       s.targets = s.targets || null;
       s.foods = s.foods || seedFoods();
       s.meals = s.meals || [];
-      // Si nunca entreno, reemplaza con el split sugerido
-      if ((s.sessions || []).length === 0) {
-        s.routines = seed().routines;
-      }
       s.version = 3;
+    }
+    // v4: rutina PPL definitiva (sin gluteo aislado ni abs) + rango de reps por ejercicio.
+    // Reemplaza las rutinas; el historial de sesiones se conserva intacto.
+    if (s.version < 4) {
+      s.routines = seedRoutines();
+      s.version = 4;
+    }
+    // asegurar shape v4 en cualquier rutina (por si quedo alguna con targetSets)
+    for (const r of s.routines) {
+      for (const ex of r.exercises) {
+        if (ex.sets == null && ex.targetSets) {
+          ex.sets = ex.targetSets.length;
+          const reps = ex.targetSets.map(t => t.reps);
+          ex.repsMin = Math.min(...reps);
+          ex.repsMax = Math.max(...reps);
+          delete ex.targetSets;
+        }
+        if (ex.sets == null) { ex.sets = 3; ex.repsMin = 8; ex.repsMax = 12; }
+      }
     }
     return s;
   }
@@ -136,90 +147,87 @@
     catch (e) { console.warn("No se pudo guardar", e); }
   }
 
+  // Ejercicio: sets (cantidad) + rango de reps objetivo.
+  // Declarada como function (hoisted) porque seed() corre antes de esta linea.
+  function EX(name, muscle, sets, repsMin, repsMax) {
+    return { id: uid(), name, muscle, sets, repsMin, repsMax };
+  }
+
+  function seedRoutines() {
+    return [
+      {
+        id: uid(), name: "Push · Pecho Hombro Triceps",
+        exercises: [
+          EX("Press banca (barra)",            "Pecho",   4, 6, 8),
+          EX("Press inclinado mancuernas",     "Pecho",   3, 8, 12),
+          EX("Aperturas en polea",             "Pecho",   3, 12, 15),
+          EX("Press militar (barra)",          "Hombro",  3, 6, 10),
+          EX("Elevaciones laterales mancuerna","Hombro",  3, 12, 20),
+          EX("Extension triceps polea",        "Triceps", 3, 10, 15),
+          EX("Press frances",                  "Triceps", 3, 8, 12),
+        ],
+      },
+      {
+        id: uid(), name: "Pull · Espalda Posterior Biceps",
+        exercises: [
+          EX("Dominadas / Jalon al pecho",     "Espalda", 4, 6, 10),
+          EX("Remo con barra",                 "Espalda", 3, 8, 10),
+          EX("Remo sentado en polea",          "Espalda", 3, 10, 12),
+          EX("Jalon brazo recto polea",        "Espalda", 3, 12, 20),
+          EX("Face pull",                      "Hombro",  3, 15, 20),
+          EX("Elevaciones laterales polea",    "Hombro",  3, 12, 20),
+          EX("Curl con barra",                 "Biceps",  3, 8, 12),
+          EX("Curl martillo",                  "Biceps",  3, 10, 15),
+        ],
+      },
+      {
+        id: uid(), name: "Piernas A · Cuadriceps",
+        exercises: [
+          EX("Sentadilla (barra)",             "Cuadriceps",  4, 6, 8),
+          EX("Prensa",                         "Cuadriceps",  3, 10, 15),
+          EX("Extension de cuadriceps",        "Cuadriceps",  3, 12, 20),
+          EX("Curl femoral sentado",           "Femoral",     3, 10, 15),
+          EX("Elevacion de gemelos",           "Pantorrilla", 3, 12, 20),
+        ],
+      },
+      {
+        id: uid(), name: "Piernas B · Isquios",
+        exercises: [
+          EX("Peso muerto rumano",             "Femoral",     4, 8, 10),
+          EX("Hack squat (o prensa)",          "Cuadriceps",  3, 10, 15),
+          EX("Extension de cuadriceps",        "Cuadriceps",  3, 12, 20),
+          EX("Curl femoral acostado",          "Femoral",     3, 10, 15),
+          EX("Elevacion de gemelos",           "Pantorrilla", 3, 15, 20),
+        ],
+      },
+      {
+        id: uid(), name: "Upper · Torso + Hombro",
+        exercises: [
+          EX("Press inclinado mancuernas",     "Pecho",   3, 8, 12),
+          EX("Remo en maquina (T-bar)",        "Espalda", 3, 8, 12),
+          EX("Jalon al pecho agarre neutro",   "Espalda", 3, 10, 12),
+          EX("Press militar mancuernas",       "Hombro",  3, 8, 12),
+          EX("Elevaciones laterales",          "Hombro",  3, 12, 20),
+          EX("Pajaros en banco (mancuerna)",   "Hombro",  3, 15, 25),
+        ],
+      },
+      {
+        id: uid(), name: "Retoque · Hombro + Brazos (opcional)",
+        exercises: [
+          EX("Elevaciones laterales polea",    "Hombro",  3, 12, 20),
+          EX("Pajaros / face pull",            "Hombro",  3, 15, 25),
+          EX("Curl banco inclinado",           "Biceps",  3, 10, 15),
+          EX("Curl martillo",                  "Biceps",  3, 10, 15),
+          EX("Extension triceps sobre cabeza", "Triceps", 3, 10, 15),
+        ],
+      },
+    ];
+  }
+
   function seed() {
-    // Helpers para armar sets rapido
-    const S = (n, reps, rir) => Array.from({length:n}, (_,i) => ({
-      reps,
-      // el ultimo set siempre 1 RIR mas bajo (mas cerca del fallo)
-      rir: Math.max(0, i === n-1 ? Math.max(0, rir-1) : rir)
-    }));
     return {
-      version: 3,
-      routines: [
-        // ===== LUN · Pierna cuadriceps =====
-        {
-          id: uid(), name: "Lun · Pierna (cuad)",
-          exercises: [
-            { id: uid(), name: "Sentadilla trasera",       muscle: "Cuadriceps",  targetSets: S(4, 5, 2) },
-            { id: uid(), name: "Prensa",                    muscle: "Cuadriceps",  targetSets: S(3, 10, 2) },
-            { id: uid(), name: "Sillon cuadriceps",         muscle: "Cuadriceps",  targetSets: S(3, 10, 1) },
-            { id: uid(), name: "Bulgaras smith",            muscle: "Cuadriceps",  targetSets: S(3, 9, 2) },
-            { id: uid(), name: "Gemelos parado",            muscle: "Pantorrilla", targetSets: S(4, 12, 1) },
-          ],
-        },
-        // ===== MAR · Pull (espalda prioridad) =====
-        {
-          id: uid(), name: "Mar · Pull (espalda)",
-          exercises: [
-            { id: uid(), name: "Dominadas lastradas",       muscle: "Espalda", targetSets: S(4, 6, 2) },
-            { id: uid(), name: "Dorsalera agarre cerrado",  muscle: "Espalda", targetSets: S(3, 9, 2) },
-            { id: uid(), name: "Remo unilateral mancuerna", muscle: "Espalda", targetSets: S(3, 9, 2) },
-            { id: uid(), name: "Pullover polea",            muscle: "Espalda", targetSets: S(3, 11, 1) },
-            { id: uid(), name: "Curl biceps barra",         muscle: "Biceps",  targetSets: S(3, 9, 2) },
-            { id: uid(), name: "Curl martillo",             muscle: "Biceps",  targetSets: S(3, 10, 1) },
-          ],
-        },
-        // ===== MIE · Push =====
-        {
-          id: uid(), name: "Mie · Push",
-          exercises: [
-            { id: uid(), name: "Press banca",               muscle: "Pecho",   targetSets: S(4, 5, 2) },
-            { id: uid(), name: "Press inclinado mancuernas",muscle: "Pecho",   targetSets: S(3, 8, 2) },
-            { id: uid(), name: "Press militar",             muscle: "Hombro",  targetSets: S(3, 7, 2) },
-            { id: uid(), name: "Elevaciones laterales",     muscle: "Hombro",  targetSets: S(4, 13, 1) },
-            { id: uid(), name: "Fondos con peso",           muscle: "Pecho",   targetSets: S(3, 9, 2) },
-            { id: uid(), name: "Extension triceps polea",   muscle: "Triceps", targetSets: S(3, 11, 1) },
-          ],
-        },
-        // ===== JUE · Pierna cadena posterior =====
-        {
-          id: uid(), name: "Jue · Pierna (posterior)",
-          exercises: [
-            { id: uid(), name: "Peso muerto convencional",  muscle: "Femoral",     targetSets: S(4, 4, 2) },
-            { id: uid(), name: "Peso muerto rumano",        muscle: "Femoral",     targetSets: S(3, 9, 2) },
-            { id: uid(), name: "Camilla femoral",           muscle: "Femoral",     targetSets: S(3, 9, 1) },
-            { id: uid(), name: "Hiperextensiones",          muscle: "Gluteo",      targetSets: S(3, 10, 1) },
-            { id: uid(), name: "Gemelos sentado",           muscle: "Pantorrilla", targetSets: S(4, 12, 1) },
-          ],
-        },
-        // ===== VIE · Upper (espalda 2 + hombro + brazos) =====
-        {
-          id: uid(), name: "Vie · Upper",
-          exercises: [
-            { id: uid(), name: "Jalon al pecho agarre cerrado", muscle: "Espalda", targetSets: S(4, 9, 2) },
-            { id: uid(), name: "Remo bajo",                     muscle: "Espalda", targetSets: S(3, 10, 1) },
-            { id: uid(), name: "Elevaciones laterales",         muscle: "Hombro",  targetSets: S(4, 13, 1) },
-            { id: uid(), name: "Pajaros / posterior",           muscle: "Hombro",  targetSets: S(3, 13, 1) },
-            { id: uid(), name: "Curl biceps polea",             muscle: "Biceps",  targetSets: S(3, 10, 1) },
-            { id: uid(), name: "Triceps trasnuca mancuerna",    muscle: "Triceps", targetSets: S(3, 11, 1) },
-            { id: uid(), name: "Abdominales",                   muscle: "Core",    targetSets: S(3, 13, 1) },
-          ],
-        },
-        // ===== SAB · Opcional · Brazos + Hombros =====
-        {
-          id: uid(), name: "Sab · Brazos + Hombros (opcional)",
-          exercises: [
-            { id: uid(), name: "Press militar mancuernas",   muscle: "Hombro",  targetSets: S(3, 9, 2) },
-            { id: uid(), name: "Elevaciones laterales",      muscle: "Hombro",  targetSets: S(4, 14, 1) },
-            { id: uid(), name: "Face pull",                  muscle: "Hombro",  targetSets: S(3, 14, 1) },
-            { id: uid(), name: "Curl predicador",            muscle: "Biceps",  targetSets: S(3, 10, 1) },
-            { id: uid(), name: "Curl concentracion",         muscle: "Biceps",  targetSets: S(3, 11, 1) },
-            { id: uid(), name: "Press frances",              muscle: "Triceps", targetSets: S(3, 10, 1) },
-            { id: uid(), name: "Triceps polea unilateral",   muscle: "Triceps", targetSets: S(3, 12, 1) },
-            { id: uid(), name: "Gemelos parado",             muscle: "Pantorrilla", targetSets: S(4, 12, 1) },
-          ],
-        },
-      ],
+      version: 4,
+      routines: seedRoutines(),
       sessions: [],
       bodyweight: [],
       settings: { restSec: 120 },
@@ -328,22 +336,24 @@
     const prev = lastSessionFor(routineId);
     const entries = routine.exercises.map((ex) => {
       const prevEntry = prev && prev.entries.find((e) => e.exerciseId === ex.id);
-      const targets = ex.targetSets && ex.targetSets.length ? ex.targetSets : [{reps:8,rir:2},{reps:8,rir:2},{reps:8,rir:2}];
-      const sets = targets.map((t, i) => {
+      const count = ex.sets || 3;
+      const suggestion = suggestWeight(ex.id, ex.repsMin);
+      const sets = [];
+      for (let i = 0; i < count; i++) {
         const ps = prevEntry && prevEntry.sets[i];
-        // sugerir peso: si tenemos historico completo con RIR, calculamos; si no, usamos ultimo
-        const suggestion = suggestWeight(ex.id, t.reps);
         const initialWeight = suggestion ? suggestion.weight : (ps ? ps.weight : 0);
-        return {
+        sets.push({
           weight: initialWeight,
-          reps: t.reps,
-          rir: t.rir,
-          targetReps: t.reps,
-          targetRir: t.rir,
+          reps: ps ? ps.reps : ex.repsMin,
+          rir: ps ? ps.rir : 2,
           done: false,
-        };
-      });
-      return { exerciseId: ex.id, name: ex.name, muscle: ex.muscle || "Otro", sets };
+        });
+      }
+      return {
+        exerciseId: ex.id, name: ex.name, muscle: ex.muscle || "Otro",
+        repsMin: ex.repsMin, repsMax: ex.repsMax,
+        sets,
+      };
     });
 
     const session = {
@@ -446,8 +456,10 @@
     const exercises = s.entries.map((entry, ei) => {
       const prevEntry = prev && prev.entries.find((e) => e.exerciseId === entry.exerciseId);
       const bestBefore = bestE1RM(entry.exerciseId, s.id);
-      const suggestion = suggestWeight(entry.exerciseId, entry.sets[0]?.targetReps);
-      const targetSummary = entry.sets.map(x => `${x.targetReps}@${x.targetRir}`).join(" · ");
+      const suggestion = suggestWeight(entry.exerciseId, entry.repsMin);
+      const rangeTxt = entry.repsMin != null
+        ? (entry.repsMin === entry.repsMax ? `\u{1F3AF} ${entry.repsMin}` : `\u{1F3AF} ${entry.repsMin}-${entry.repsMax}`)
+        : "";
 
       // Warm-up ramp: solo si primer set tiene peso > 40kg
       const workingW = entry.sets[0]?.weight || 0;
@@ -469,12 +481,15 @@
         const prevTxt = ps ? `<div class="prev-hint">Ultimo: <b>${ps.weight}kg × ${ps.reps}</b> · RIR ${ps.rir}${isPR ? '<span class="pr-mark">◆ PR</span>' : ''}</div>` : "";
         return `
           <div class="set ${set.done ? "done" : ""}" data-ei="${ei}" data-si="${si}">
-            <div class="idx">${si + 1}<span class="target">${set.targetReps}@${set.targetRir}</span></div>
+            <div class="idx">${si + 1}</div>
             ${fieldHtml("weight", set.weight)}
             ${fieldHtml("reps", set.reps)}
             ${fieldHtml("rir", set.rir)}
             <button class="set-btn check" data-action="toggle-done" data-ei="${ei}" data-si="${si}" aria-label="Marcar hecho">
               ${ICON.check}
+            </button>
+            <button class="set-btn trash" data-action="rm-set" data-ei="${ei}" data-si="${si}" aria-label="Borrar serie">
+              ${ICON.trash}
             </button>
           </div>
           ${si === 0 ? prevTxt : ""}`;
@@ -490,13 +505,13 @@
           <div class="ex-head">
             <div>
               <div class="name">${esc(entry.name)}</div>
-              <div class="muscle">${esc(entry.muscle || "")} · ${esc(targetSummary)}</div>
+              <div class="muscle">${esc(entry.muscle || "")} · ${entry.sets.length} series · ${rangeTxt} reps</div>
             </div>
             ${suggestHtml}
           </div>
           ${warmupHtml}
           <div class="set-header">
-            <div>#</div><div>KG</div><div>REPS</div><div>RIR</div><div></div>
+            <div>#</div><div>KG</div><div>REPS</div><div>RIR</div><div></div><div></div>
           </div>
           ${setsHtml}
           <button class="add-set" data-action="add-set" data-ei="${ei}">+ Serie extra</button>
@@ -537,7 +552,7 @@
   function viewRutinas() {
     const cards = state.routines.map((r) => {
       const muscles = [...new Set(r.exercises.map(e => e.muscle))].join(" · ");
-      const totalSets = r.exercises.reduce((n, e) => n + (e.targetSets?.length || 0), 0);
+      const totalSets = r.exercises.reduce((n, e) => n + (e.sets || 0), 0);
       return `
       <div class="card tap" data-action="edit-routine" data-id="${r.id}">
         <div class="row">
@@ -566,14 +581,14 @@
     const r = getRoutine(view.params.id);
     if (!r) return viewRutinas();
     const exs = r.exercises.map((ex) => {
-      const summary = (ex.targetSets || []).map(t => `${t.reps}@${t.rir}`).join(" · ");
+      const summary = `${ex.sets}× \u{1F3AF} ${ex.repsMin}${ex.repsMax !== ex.repsMin ? "-" + ex.repsMax : ""} reps`;
       return `
       <div class="card tap" data-action="edit-exercise" data-id="${ex.id}">
         <div class="row">
           <div class="grow">
             <div class="title-lg">${esc(ex.name)}</div>
             <div class="muted" style="margin-top:4px; text-transform:uppercase; letter-spacing:0.14em; font-size:11px">${esc(ex.muscle || "Otro")}</div>
-            <div class="muted" style="margin-top:6px; font-variant-numeric: tabular-nums">${esc(summary)}</div>
+            <div class="muted" style="margin-top:6px; font-variant-numeric: tabular-nums">${summary}</div>
           </div>
           <span class="chev">${ICON.chev}</span>
         </div>
@@ -591,20 +606,13 @@
       <button class="btn danger" data-action="del-routine">Eliminar este dia</button>`;
   }
 
-  // ---------- vista: EDITAR EJERCICIO (prescripcion) ----------
+  // ---------- vista: EDITAR EJERCICIO ----------
   function viewExerciseEdit() {
     const r = getRoutine(view.params.rid);
     if (!r) return viewRutinas();
     const ex = r.exercises.find(x => x.id === view.params.eid);
     if (!ex) return viewRoutineEdit();
     const muscleOptions = MUSCLES.map(m => `<option value="${m}" ${ex.muscle === m ? "selected" : ""}>${m}</option>`).join("");
-    const setsHtml = (ex.targetSets || []).map((t, i) => `
-      <div class="set-editor" data-i="${i}">
-        <div class="idx">${i+1}</div>
-        <input type="number" inputmode="numeric" data-tk="reps" value="${t.reps}" aria-label="reps objetivo" />
-        <input type="number" inputmode="numeric" data-tk="rir" value="${t.rir}" aria-label="RIR objetivo" />
-        <button data-action="del-target-set" data-i="${i}" aria-label="quitar">✕</button>
-      </div>`).join("");
     return `
       <button class="back" data-action="back-routine" data-rid="${r.id}">${ICON.back} ${esc(r.name)}</button>
       <div class="eyebrow">Ejercicio</div>
@@ -616,12 +624,12 @@
       <div class="section-title">Musculo</div>
       <select class="select" id="ex-muscle">${muscleOptions}</select>
 
-      <div class="section-title">Prescripcion por serie</div>
-      <div class="set-header" style="grid-template-columns: 24px 1fr 1fr 32px">
-        <div>#</div><div>REPS</div><div>RIR</div><div></div>
+      <div class="section-title">Series y objetivo de reps</div>
+      <div class="input-row">
+        <div><div class="lbl">Series</div><input class="input" id="ex-sets" type="number" inputmode="numeric" value="${ex.sets}" style="margin:0" /></div>
+        <div><div class="lbl">Reps min</div><input class="input" id="ex-repsmin" type="number" inputmode="numeric" value="${ex.repsMin}" style="margin:0" /></div>
+        <div><div class="lbl">Reps max</div><input class="input" id="ex-repsmax" type="number" inputmode="numeric" value="${ex.repsMax}" style="margin:0" /></div>
       </div>
-      ${setsHtml}
-      <button class="add-set" data-action="add-target-set">+ Serie</button>
 
       <div style="height:16px"></div>
       <button class="btn accent" data-action="save-exercise">${ICON.check} Guardar</button>
@@ -1290,7 +1298,7 @@
         const last = s.entries[ei].sets[s.entries[ei].sets.length - 1];
         s.entries[ei].sets.push(last
           ? { ...last, done: false }
-          : { weight: 0, reps: 8, rir: 2, targetReps: 8, targetRir: 2, done: false });
+          : { weight: 0, reps: 8, rir: 2, done: false });
         save(); render(); break;
       }
       case "toggle-done": {
@@ -1303,6 +1311,17 @@
           startRest(state.settings.restSec || 120);
         }
         render();
+        break;
+      }
+      case "rm-set": {
+        const ei = +btn.dataset.ei, si = +btn.dataset.si;
+        const s = getSession(view.params.id);
+        if (s.entries[ei].sets.length > 1) {
+          s.entries[ei].sets.splice(si, 1);
+          save(); render();
+        } else {
+          toast("Cada ejercicio necesita al menos 1 serie");
+        }
         break;
       }
       case "finish": {
@@ -1335,12 +1354,7 @@
         const name = inp.value.trim();
         if (!name) { inp.focus(); break; }
         const r = getRoutine(view.params.id);
-        const ex = {
-          id: uid(),
-          name,
-          muscle: guessMuscle(name),
-          targetSets: [{reps:8,rir:2},{reps:8,rir:2},{reps:8,rir:1}]
-        };
+        const ex = { id: uid(), name, muscle: guessMuscle(name), sets: 3, repsMin: 8, repsMax: 12 };
         r.exercises.push(ex);
         save();
         go("exercise-edit", { rid: r.id, eid: ex.id });
@@ -1357,32 +1371,12 @@
         const muscle = $("#ex-muscle").value;
         if (name) ex.name = name;
         if (muscle) ex.muscle = muscle;
-        // leer sets
-        const rows = appEl.querySelectorAll(".set-editor");
-        const targets = [];
-        rows.forEach(row => {
-          const reps = parseInt(row.querySelector('input[data-tk="reps"]').value) || 0;
-          const rir = parseInt(row.querySelector('input[data-tk="rir"]').value) || 0;
-          targets.push({ reps: clamp(reps, LIMITS.reps), rir: clamp(rir, LIMITS.rir) });
-        });
-        if (targets.length) ex.targetSets = targets;
+        ex.sets = Math.max(1, parseInt($("#ex-sets").value) || 3);
+        ex.repsMin = clamp(parseInt($("#ex-repsmin").value) || 8, LIMITS.reps);
+        ex.repsMax = Math.max(ex.repsMin, clamp(parseInt($("#ex-repsmax").value) || ex.repsMin, LIMITS.reps));
         save();
         toast("Guardado");
         go("routine-edit", { id: r.id });
-        break;
-      }
-      case "add-target-set": {
-        const r = getRoutine(view.params.rid);
-        const ex = r.exercises.find(x => x.id === view.params.eid);
-        const last = ex.targetSets[ex.targetSets.length - 1] || { reps: 8, rir: 2 };
-        ex.targetSets.push({ ...last });
-        save(); render(); break;
-      }
-      case "del-target-set": {
-        const i = +btn.dataset.i;
-        const r = getRoutine(view.params.rid);
-        const ex = r.exercises.find(x => x.id === view.params.eid);
-        if (ex.targetSets.length > 1) { ex.targetSets.splice(i, 1); save(); render(); }
         break;
       }
       case "del-exercise": {
@@ -1574,6 +1568,17 @@
   // Arranque
   $("#tabbar").hidden = false;
   render();
+
+  // Splash: minimo 1.2s en pantalla, tap para saltarla
+  const splashEl = $("#splash");
+  if (splashEl) {
+    const dismissSplash = () => {
+      splashEl.classList.add("hide");
+      setTimeout(() => splashEl.remove(), 700);
+    };
+    splashEl.addEventListener("click", dismissSplash, { once: true });
+    setTimeout(dismissSplash, 1200);
+  }
 
   // SW
   if ("serviceWorker" in navigator) {

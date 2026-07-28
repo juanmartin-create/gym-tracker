@@ -1,11 +1,12 @@
 /* Service worker — cachea la app para que abra sin conexión. */
-const CACHE = "thrst-log-v3";
+const CACHE = "thrst-log-v4.3";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
   "./manifest.webmanifest",
+  "./img/splash.jpg",
   "./icons/icon-180.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",

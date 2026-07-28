@@ -194,7 +194,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 
 .set-header {
   display: grid;
-  grid-template-columns: 20px 1fr 1fr 1fr 40px;
+  grid-template-columns: 18px 1fr 1fr 1fr 38px 32px;
   gap: 4px;
   padding: 0 0 6px;
   font-size: 10px;
@@ -208,7 +208,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 
 .set {
   display: grid;
-  grid-template-columns: 20px 1fr 1fr 1fr 40px;
+  grid-template-columns: 18px 1fr 1fr 1fr 38px 32px;
   align-items: center;
   gap: 4px;
   padding: 8px 0;
@@ -221,21 +221,13 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
-.set .idx .target {
-  display: block;
-  font-size: 9px;
-  color: var(--muted-2);
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  margin-top: 1px;
-}
 
 .field { text-align: center; }
 .stepper { display: flex; align-items: center; justify-content: center; gap: 0; }
 .stepper button {
-  width: 28px; height: 44px; flex-shrink: 0; padding: 0;
+  width: 24px; height: 44px; flex-shrink: 0; padding: 0;
   background: var(--surface); border: 1px solid var(--border); color: var(--muted);
-  font-size: 18px; font-weight: 400; cursor: pointer; line-height: 1;
+  font-size: 17px; font-weight: 400; cursor: pointer; line-height: 1;
   font-family: var(--sans);
 }
 .stepper button:first-child { border-radius: 2px 0 0 2px; border-right: none; }
@@ -243,32 +235,37 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .stepper button:active { background: var(--surface-2); color: var(--text); }
 .stepper input {
   width: 100%; min-width: 0; height: 44px; text-align: center;
+  /* 15px es seguro: user-scalable=no evita el zoom de iOS en focus */
   background: var(--surface); border: 1px solid var(--border);
-  color: var(--text); font-size: 16px; font-weight: 600; padding: 0 1px;
+  color: var(--text); font-size: 15px; font-weight: 600; padding: 0 1px;
   font-variant-numeric: tabular-nums;
   font-family: var(--sans);
 }
 
-/* En pantallas anchas (>= 400) los steppers pueden respirar */
-@media (min-width: 400px) {
-  .stepper button { width: 32px; font-size: 20px; }
+/* En pantallas anchas (>= 420) los steppers pueden respirar */
+@media (min-width: 420px) {
+  .stepper button { width: 30px; font-size: 20px; }
+  .stepper input { font-size: 16px; }
 }
 .stepper input:focus { outline: none; border-color: var(--accent); }
 
 .set .set-btn {
   background: var(--surface); border: 1px solid var(--border);
   color: var(--muted); cursor: pointer; padding: 0;
-  width: 40px; height: 44px; border-radius: 2px;
+  width: 100%; height: 44px; border-radius: 2px;
   display: flex; align-items: center; justify-content: center;
 }
 .set .set-btn.check { color: var(--accent); border-color: var(--border-2); }
 .set.done .set-btn.check { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.set .set-btn.trash { color: var(--muted); background: transparent; }
+.set .set-btn.trash:active { color: var(--danger); border-color: var(--danger); }
 .set .set-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2.4; }
+.set .set-btn.trash svg { width: 15px; height: 15px; stroke-width: 2; }
 
 .prev-hint {
   font-size: 11px;
   color: var(--muted);
-  margin: 6px 0 4px 32px;
+  margin: 6px 0 4px 22px;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -522,6 +519,71 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   font-variant-numeric: tabular-nums;
 }
 .spark-row .top .val b { color: var(--accent); font-weight: 700; }
+
+/* ===== Splash (pantalla de carga) ===== */
+.splash {
+  position: fixed; inset: 0; z-index: 200;
+  background: var(--bg);
+  display: flex; align-items: flex-end; justify-content: center;
+  opacity: 1;
+  transition: opacity .6s ease;
+}
+.splash.hide { opacity: 0; pointer-events: none; }
+.splash img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center top;
+  /* edicion: B&N editorial, mas contraste, oscurecida */
+  filter: grayscale(0.85) contrast(1.15) brightness(0.7);
+}
+.splash::after {
+  content: "";
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(180deg, rgba(10,10,10,0.35) 0%, rgba(10,10,10,0) 30%, rgba(10,10,10,0) 45%, rgba(10,10,10,0.92) 88%, var(--bg) 100%);
+}
+.splash-content {
+  position: relative; z-index: 1;
+  text-align: center;
+  padding-bottom: calc(var(--safe-bottom) + 72px);
+  animation: splash-rise .9s ease both;
+}
+.splash-eyebrow {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.34em;
+  color: var(--accent);
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.splash-title {
+  font-family: var(--serif);
+  font-style: normal;
+  font-size: 72px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+.splash-title .z {
+  font-style: italic;
+  color: var(--accent);
+  display: inline-block;
+  margin-left: -6px;
+  transform: rotate(-5deg) translateY(2px);
+  text-shadow: 0 4px 24px rgba(212,177,113,0.35);
+}
+.splash-motto {
+  margin-top: 14px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  color: var(--muted);
+  font-weight: 600;
+}
+@keyframes splash-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 /* ===== Toast ===== */
 #toast {
