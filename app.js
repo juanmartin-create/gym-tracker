@@ -637,8 +637,23 @@
       <button class="btn danger" data-action="del-exercise">Eliminar ejercicio</button>`;
   }
 
-  // ---------- vista: HISTORIAL ----------
-  // ---------- exportar log a CSV ----------
+  // ---------- backup / exportar ----------
+  // Nada de lo que sigue borra localStorage: exportar solo lee el estado, y
+  // restaurar hace merge (union) para no perder lo que ya hay en el dispositivo.
+  const STAMP = () => new Date().toISOString().slice(0, 10);
+
+  function downloadFile(filename, mime, text) {
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   // Genera un CSV con una fila por serie registrada (marcada como hecha).
   // Solo lee el estado; no modifica ni borra ningun dato.
   function buildLogCSV() {
@@ -675,16 +690,148 @@
       return;
     }
     // BOM para que Excel abra bien los acentos.
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `thrst-log-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    downloadFile(`thrst-log-${STAMP()}.csv`, "text/csv;charset=utf-8;", "\uFEFF" + csv);
+    // Ojo: el CSV NO cuenta como backup (no lleva rutinas, alimentos ni perfil),
+    // asi que no toca lastBackup.
     toast("Log exportado");
+  }
+
+  // Backup completo: TODO el estado (rutinas, sesiones, peso corporal,
+  // comidas, biblioteca de alimentos, perfil y objetivos). Es el archivo
+  // que sirve para volver a levantar la app en un celular nuevo.
+  function exportJSON() {
+    const payload = {
+      app: "thrst-training-log",
+      kind: "backup",
+      exportedAt: new Date().toISOString(),
+      storeKey: STORE_KEY,
+      state,
+    };
+    downloadFile(`thrst-backup-${STAMP()}.json`, "application/json", JSON.stringify(payload, null, 2));
+    markBackup();
+    toast("Backup completo descargado");
+  }
+
+  function markBackup() {
+    state.lastBackup = new Date().toISOString();
+    save();
+    render();
+  }
+
+  // Abre el file picker y restaura un backup JSON.
+  function importJSON() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json,application/json";
+    input.style.display = "none";
+    input.addEventListener("change", () => {
+      const file = input.files && input.files[0];
+      document.body.removeChild(input);
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onerror = () => toast("No se pudo leer el archivo");
+      reader.onload = () => {
+        try { applyBackup(String(reader.result)); }
+        catch (err) { console.warn(err); toast("Backup invalido"); }
+      };
+      reader.readAsText(file);
+    });
+    document.body.appendChild(input);
+    input.click();
+  }
+
+  function applyBackup(text) {
+    const parsed = JSON.parse(text);
+    // Acepta el envoltorio {app,state} o un state suelto.
+    const raw = parsed && parsed.state ? parsed.state : parsed;
+    if (!raw || !Array.isArray(raw.sessions) || !Array.isArray(raw.routines)) {
+      toast("El archivo no es un backup de THRST");
+      return;
+    }
+    const incoming = migrate(raw);
+    const newSessions = incoming.sessions.filter(s => !state.sessions.some(x => x.id === s.id)).length;
+    const ok = confirm(
+      `Restaurar backup?\n\n` +
+      `\u2022 Se agregan ${newSessions} sesion(es) que no estan en este dispositivo.\n` +
+      `\u2022 Las sesiones que ya tenes NO se borran.\n` +
+      `\u2022 Las rutinas, perfil y objetivos pasan a ser los del backup.`
+    );
+    if (!ok) return;
+    state = mergeState(state, incoming);
+    save();
+    stopRest(false);
+    go("historial");
+    toast(`Backup restaurado \u00B7 +${newSessions} sesiones`);
+  }
+
+  // Merge por union: nunca descarta datos locales que no esten en el backup.
+  function mergeState(cur, inc) {
+    const byId = (list) => new Map(list.map(x => [x.id, x]));
+    const doneCount = (s) => (s.entries || []).reduce((n, e) => n + (e.sets || []).filter(x => x.done).length, 0);
+
+    // Sesiones: union por id. Si el id existe en los dos, gana la que tenga
+    // mas series marcadas (la mas completa).
+    const sessions = byId(cur.sessions);
+    for (const s of inc.sessions) {
+      const mine = sessions.get(s.id);
+      if (!mine || doneCount(s) > doneCount(mine)) sessions.set(s.id, s);
+    }
+
+    // Peso corporal: union deduplicando por fecha.
+    const bw = new Map((cur.bodyweight || []).map(b => [String(b.date).slice(0, 10), b]));
+    for (const b of (inc.bodyweight || [])) {
+      const k = String(b.date).slice(0, 10);
+      if (!bw.has(k)) bw.set(k, b);
+    }
+
+    // Comidas y alimentos: union por id, gana lo local en caso de choque.
+    const meals = byId(inc.meals || []);
+    for (const m of (cur.meals || [])) meals.set(m.id, m);
+    const foods = byId(inc.foods || []);
+    for (const f of (cur.foods || [])) foods.set(f.id, f);
+
+    return {
+      ...cur,
+      version: Math.max(cur.version || 0, inc.version || 0),
+      // El backup trae el programa que el usuario configuro: eso se restaura.
+      routines: inc.routines.length ? inc.routines : cur.routines,
+      sessions: [...sessions.values()].sort((a, b) => new Date(a.date) - new Date(b.date)),
+      bodyweight: [...bw.values()].sort((a, b) => new Date(a.date) - new Date(b.date)),
+      meals: [...meals.values()],
+      foods: [...foods.values()],
+      profile: inc.profile || cur.profile,
+      targets: inc.targets || cur.targets,
+      settings: { ...cur.settings, ...(inc.settings || {}) },
+      lastBackup: cur.lastBackup || inc.lastBackup || null,
+    };
+  }
+
+  // Bloque de backup que se muestra arriba del historial.
+  function backupBlock() {
+    const sets = state.sessions.reduce(
+      (n, s) => n + s.entries.reduce((m, e) => m + e.sets.filter(x => x.done).length, 0), 0);
+    const last = state.lastBackup ? new Date(state.lastBackup) : null;
+    const days = last ? Math.floor((Date.now() - last.getTime()) / 86400000) : null;
+    const stale = days == null || days >= 14;
+    const lastTxt = last
+      ? `Ultimo backup: ${fmtShort(state.lastBackup)}${days === 0 ? " (hoy)" : ` \u00B7 hace ${days}d`}`
+      : "Todavia no bajaste ningun backup.";
+    return `
+      <div class="card" style="margin-bottom:20px">
+        <div class="row" style="margin-bottom:4px"><div class="title-lg">Backup</div></div>
+        <div class="muted" style="margin-bottom:14px">
+          ${state.sessions.length} sesiones \u00B7 ${sets} series registradas.
+          Todo vive solo en este celular: si borras el cache de Safari o cambias de telefono, sin backup se pierde.
+        </div>
+        <button class="btn secondary" data-action="export-csv">\u2913 Exportar CSV (analisis)</button>
+        <div style="height:10px"></div>
+        <button class="btn ${stale ? "accent" : "secondary"}" data-action="export-json">\u2913 Backup completo (JSON)</button>
+        <div style="height:10px"></div>
+        <button class="btn ghost" data-action="import-json">\u2912 Restaurar backup</button>
+        <div class="muted" style="margin-top:12px; font-size:11px">
+          ${stale ? "\u25C6 " : ""}${esc(lastTxt)}
+        </div>
+      </div>`;
   }
 
   function viewHistorial() {
@@ -693,7 +840,9 @@
       return `
         <div class="eyebrow">Log</div>
         <div class="header"><h1>Historial</h1></div>
-        ${emptyBlock("—", "Sin registros", "Cuando termines una sesion, va a aparecer aqui.", "Ir a Train", "go-hoy")}`;
+        ${emptyBlock("—", "Sin registros", "Cuando termines una sesion, va a aparecer aqui.", "Ir a Train", "go-hoy")}
+        <div style="height:20px"></div>
+        <button class="btn ghost" data-action="import-json">⤒ Restaurar backup</button>`;
     }
     const blocks = sessions.map((s) => {
       const lines = s.entries.map((e) => {
@@ -719,7 +868,7 @@
     return `
       <div class="eyebrow">Log</div>
       <div class="header"><h1>Historial</h1></div>
-      <button class="btn secondary" data-action="export-csv" style="margin-bottom:16px">⤓ Exportar CSV</button>
+      ${backupBlock()}
       ${blocks}`;
   }
 
@@ -1342,6 +1491,8 @@
       case "go-hoy": go("hoy"); break;
       case "go-rutinas": go("rutinas"); break;
       case "export-csv": exportCSV(); break;
+      case "export-json": exportJSON(); break;
+      case "import-json": importJSON(); break;
 
       case "add-set": {
         const ei = +btn.dataset.ei;

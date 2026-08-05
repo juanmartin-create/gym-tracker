@@ -36,6 +36,10 @@ App personal para trackear entrenamiento y macros. Inspirada en la THRST App de 
 
 **Log**
 - Historial cronologico con top set y PRs marcados.
+- **Exportar CSV**: una fila por serie hecha (fecha, rutina, ejercicio, musculo, peso, reps, RIR, e1RM). Para abrir en Excel / Sheets y analizar la progresion.
+- **Backup completo (JSON)**: dump de todo el estado — rutinas, sesiones, peso corporal, comidas, alimentos, perfil y objetivos.
+- **Restaurar backup**: levanta un JSON en un celular nuevo. Hace *merge por union*, no reemplaza: las sesiones que ya estan en el dispositivo no se borran, y si un id coincide gana la version con mas series marcadas. Las rutinas, perfil y objetivos si pasan a ser los del backup.
+- Aviso de "ultimo backup" con recordatorio a los 14 dias. Exportar CSV no cuenta como backup (es un formato con perdida).
 
 ## Deploy en Netlify (auto-actualiza en iOS al re-abrir)
 
@@ -61,3 +65,13 @@ gym-tracker/
 ## Datos
 
 Todo en `localStorage` bajo `gymtracker:v3`. Migracion automatica desde v1/v2.
+
+**Un deploy no borra tus datos.** La app solo hace `getItem` / `setItem` sobre esa clave: no existe ningun `localStorage.clear()` ni `removeItem` en el codigo. Cuando sube la version del service worker se borra el cache de *assets* (HTML/CSS/JS), que es un almacenamiento distinto de `localStorage` — el log sobrevive intacto.
+
+Lo que si te puede hacer perder el progreso, y es la razon del backup:
+
+- Borrar el historial / cache del sitio en Safari.
+- Perder o resetear el celular.
+- ITP de Safari: descarta el storage de sitios web no visitados en ~7 dias (instalar la PWA en la pantalla de inicio y usarla lo evita).
+
+Bajate el JSON cada tanto y guardalo en iCloud/Drive.

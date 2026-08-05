@@ -1,5 +1,7 @@
 /* Service worker — cachea la app para que abra sin conexión. */
-const CACHE = "thrst-log-v4.3";
+// Al subir la version se borra el cache viejo de ASSETS (HTML/CSS/JS).
+// Ojo: eso NO toca localStorage — el log de entrenamiento sobrevive intacto.
+const CACHE = "thrst-log-v4.4";
 const ASSETS = [
   "./",
   "./index.html",
