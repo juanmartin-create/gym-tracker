@@ -638,6 +638,55 @@
   }
 
   // ---------- vista: HISTORIAL ----------
+  // ---------- exportar log a CSV ----------
+  // Genera un CSV con una fila por serie registrada (marcada como hecha).
+  // Solo lee el estado; no modifica ni borra ningun dato.
+  function buildLogCSV() {
+    const sep = ",";
+    const q = (v) => {
+      const s = String(v == null ? "" : v);
+      return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const headers = ["Fecha", "Rutina", "Ejercicio", "Musculo", "Serie", "Peso_kg", "Reps", "RIR", "e1RM", "Notas"];
+    const rows = [headers.join(sep)];
+    const sessions = [...state.sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
+    for (const s of sessions) {
+      const fecha = new Date(s.date).toISOString().slice(0, 10);
+      for (const e of s.entries) {
+        let n = 0;
+        for (const st of e.sets) {
+          if (!st.done) continue;
+          n++;
+          rows.push([
+            fecha, s.routineName || "", e.name || "", e.muscle || "",
+            n, st.weight, st.reps, st.rir,
+            Math.round(e1rm(st.weight, st.reps)), s.notes || "",
+          ].map(q).join(sep));
+        }
+      }
+    }
+    return rows.join("\r\n");
+  }
+
+  function exportCSV() {
+    const csv = buildLogCSV();
+    if (csv.split("\r\n").length <= 1) {
+      toast("No hay series registradas para exportar");
+      return;
+    }
+    // BOM para que Excel abra bien los acentos.
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `thrst-log-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast("Log exportado");
+  }
+
   function viewHistorial() {
     const sessions = [...state.sessions].sort((a, b) => new Date(b.date) - new Date(a.date));
     if (sessions.length === 0) {
@@ -670,6 +719,7 @@
     return `
       <div class="eyebrow">Log</div>
       <div class="header"><h1>Historial</h1></div>
+      <button class="btn secondary" data-action="export-csv" style="margin-bottom:16px">⤓ Exportar CSV</button>
       ${blocks}`;
   }
 
@@ -1291,6 +1341,7 @@
       case "start": startSession(btn.dataset.id); break;
       case "go-hoy": go("hoy"); break;
       case "go-rutinas": go("rutinas"); break;
+      case "export-csv": exportCSV(); break;
 
       case "add-set": {
         const ei = +btn.dataset.ei;
