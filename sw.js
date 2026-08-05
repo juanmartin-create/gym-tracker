@@ -1,5 +1,5 @@
 /* Service worker — cachea la app para que abra sin conexión. */
-const CACHE = "thrst-log-v4.3";
+const CACHE = "thrst-log-v4.4";
 const ASSETS = [
   "./",
   "./index.html",
